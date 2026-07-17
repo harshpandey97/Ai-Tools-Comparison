@@ -1,0 +1,7 @@
+benchmark,ChatGPT,Claude,Gemini
+GSM8K,96.5,97.1,95.9
+HumanEval,92.1,94.3,90.7
+MATH,85.3,87.9,84.1
+MMLU,90.2,91.5,89.8
+MMMU,78.4,76.2,81.9
+SWE-bench,55.4,62.8,51.2

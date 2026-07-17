@@ -1,0 +1,4 @@
+tool_primary,avg_satisfaction,avg_ease_of_use,avg_accuracy,recommend_rate,avg_monthly_hours,n_respondents
+ChatGPT,7.8,7.9,7.5,90.0,20.4,10
+Claude,8.8,8.5,8.8,100.0,29.0,10
+Gemini,7.0,7.7,6.9,60.0,12.3,10

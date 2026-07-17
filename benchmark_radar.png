@@ -1,0 +1,157 @@
+"""
+AI Tools Comparison — Analysis Script
+Analyzes benchmark and user survey data comparing ChatGPT, Claude, and Gemini.
+Outputs summary stats (CSV) and charts (PNG) to /reports and /visuals.
+"""
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import os
+
+sns.set_theme(style="whitegrid")
+PALETTE = {"ChatGPT": "#10A37F", "Claude": "#D97757", "Gemini": "#4285F4"}
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(BASE_DIR, "data")
+VIS_DIR = os.path.join(BASE_DIR, "visuals")
+REPORT_DIR = os.path.join(BASE_DIR, "reports")
+
+os.makedirs(VIS_DIR, exist_ok=True)
+os.makedirs(REPORT_DIR, exist_ok=True)
+
+
+def load_data():
+    bench = pd.read_csv(os.path.join(DATA_DIR, "ai_tools_benchmarks.csv"))
+    survey = pd.read_csv(os.path.join(DATA_DIR, "user_survey.csv"))
+    return bench, survey
+
+
+def benchmark_summary(bench: pd.DataFrame):
+    """Pivot benchmark scores into a tool x benchmark table and save as CSV."""
+    perf = bench[bench["category"].isin(["reasoning", "coding", "math", "multimodal"])]
+    pivot = perf.pivot_table(index="benchmark", columns="tool", values="score")
+    pivot.to_csv(os.path.join(REPORT_DIR, "benchmark_pivot.csv"))
+    print("\n=== Benchmark Scores (higher is better) ===")
+    print(pivot.round(1))
+    return pivot
+
+
+def plot_benchmark_radar(pivot: pd.DataFrame):
+    import numpy as np
+
+    categories = list(pivot.index)
+    n = len(categories)
+    angles = [i / n * 2 * 3.14159265 for i in range(n)]
+    angles += angles[:1]
+
+    fig, ax = plt.subplots(figsize=(7, 7), subplot_kw=dict(polar=True))
+    for tool in pivot.columns:
+        values = pivot[tool].tolist()
+        values += values[:1]
+        ax.plot(angles, values, label=tool, color=PALETTE.get(tool), linewidth=2)
+        ax.fill(angles, values, color=PALETTE.get(tool), alpha=0.1)
+
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(categories, fontsize=9)
+    ax.set_title("Benchmark Performance Comparison", fontsize=13, fontweight="bold", pad=20)
+    ax.legend(loc="upper right", bbox_to_anchor=(1.3, 1.1))
+    plt.tight_layout()
+    plt.savefig(os.path.join(VIS_DIR, "benchmark_radar.png"), dpi=150, bbox_inches="tight")
+    plt.close()
+
+
+def plot_pricing(bench: pd.DataFrame):
+    pricing = bench[bench["category"] == "pricing"]
+    pivot = pricing.pivot_table(index="benchmark", columns="tool", values="score")
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    pivot.T.plot(kind="bar", ax=ax, color=["#4C72B0", "#DD8452"])
+    ax.set_ylabel("USD per million tokens")
+    ax.set_title("Pricing Comparison: Input vs Output Cost", fontsize=13, fontweight="bold")
+    ax.set_xlabel("")
+    plt.xticks(rotation=0)
+    plt.tight_layout()
+    plt.savefig(os.path.join(VIS_DIR, "pricing_comparison.png"), dpi=150)
+    plt.close()
+
+
+def plot_context_and_speed(bench: pd.DataFrame):
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    ctx = bench[bench["benchmark"] == "max_tokens"]
+    axes[0].bar(ctx["tool"], ctx["score"], color=[PALETTE[t] for t in ctx["tool"]])
+    axes[0].set_title("Context Window Size", fontweight="bold")
+    axes[0].set_ylabel("Max tokens")
+    axes[0].set_yscale("log")
+
+    speed = bench[bench["benchmark"] == "tokens_per_sec"]
+    axes[1].bar(speed["tool"], speed["score"], color=[PALETTE[t] for t in speed["tool"]])
+    axes[1].set_title("Generation Speed", fontweight="bold")
+    axes[1].set_ylabel("Tokens/sec")
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(VIS_DIR, "context_and_speed.png"), dpi=150)
+    plt.close()
+
+
+def survey_summary(survey: pd.DataFrame):
+    summary = survey.groupby("tool_primary").agg(
+        avg_satisfaction=("satisfaction_score", "mean"),
+        avg_ease_of_use=("ease_of_use", "mean"),
+        avg_accuracy=("accuracy_rating", "mean"),
+        recommend_rate=("would_recommend", lambda x: (x == "yes").mean() * 100),
+        avg_monthly_hours=("monthly_usage_hours", "mean"),
+        n_respondents=("respondent_id", "count"),
+    ).round(2)
+    summary.to_csv(os.path.join(REPORT_DIR, "survey_summary.csv"))
+    print("\n=== User Survey Summary ===")
+    print(summary)
+    return summary
+
+
+def plot_survey_satisfaction(survey: pd.DataFrame):
+    fig, ax = plt.subplots(figsize=(8, 5))
+    order = ["ChatGPT", "Claude", "Gemini"]
+    sns.boxplot(data=survey, x="tool_primary", y="satisfaction_score", order=order,
+                palette=PALETTE, ax=ax)
+    ax.set_title("User Satisfaction Distribution by Tool", fontsize=13, fontweight="bold")
+    ax.set_xlabel("")
+    ax.set_ylabel("Satisfaction Score (1-10)")
+    plt.tight_layout()
+    plt.savefig(os.path.join(VIS_DIR, "satisfaction_boxplot.png"), dpi=150)
+    plt.close()
+
+
+def plot_use_case_breakdown(survey: pd.DataFrame):
+    ct = pd.crosstab(survey["use_case"], survey["tool_primary"])
+    ct = ct[["ChatGPT", "Claude", "Gemini"]]
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ct.plot(kind="bar", stacked=True, ax=ax, color=[PALETTE[c] for c in ct.columns])
+    ax.set_title("Primary Tool Choice by Use Case", fontsize=13, fontweight="bold")
+    ax.set_ylabel("Number of Respondents")
+    ax.set_xlabel("")
+    plt.xticks(rotation=0)
+    plt.tight_layout()
+    plt.savefig(os.path.join(VIS_DIR, "use_case_breakdown.png"), dpi=150)
+    plt.close()
+
+
+def main():
+    bench, survey = load_data()
+
+    pivot = benchmark_summary(bench)
+    plot_benchmark_radar(pivot)
+    plot_pricing(bench)
+    plot_context_and_speed(bench)
+
+    survey_summary(survey)
+    plot_survey_satisfaction(survey)
+    plot_use_case_breakdown(survey)
+
+    print(f"\nAll visuals saved to: {VIS_DIR}")
+    print(f"All report CSVs saved to: {REPORT_DIR}")
+
+
+if __name__ == "__main__":
+    main()
